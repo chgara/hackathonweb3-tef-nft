@@ -7,7 +7,12 @@ dotenv.config();
 // read each line from the wallets.txt file from the ../
 function getAddress(): string[] {
 	const file = fs.readFileSync('./scripts/wallets.txt', 'utf8');
-	return file.split('\n').filter(i => i !== '');
+	// split the file by line and remove the last empty line
+	// and eliminate /r
+	return file
+		.split('\n')
+		.filter(i => i)
+		.map(i => i.replace(/\r/g, ''));
 }
 
 async function dev_main(): Promise<void> {
@@ -46,11 +51,21 @@ async function main(): Promise<void> {
 		throw new Error('CONTRACT_ADDRESS not set');
 	}
 
+	let nonceOffset = 0;
+	async function getNonce(address: string): Promise<number> {
+		return (
+			(await ethers.provider.getTransactionCount(address)) +
+			nonceOffset++
+		);
+	}
+
 	const NFT = NFTFactory.attach(process.env.CONTRACT_ADDRESS);
 
 	getAddress().forEach(async i => {
 		console.log('Adding to claim list:', i);
-		const tx = await NFT.connect(deployer).addToClaimList(i);
+		const tx = await NFT.connect(deployer).addToClaimList(i, {
+			nonce: await getNonce(deployer.address),
+		});
 		await tx.wait();
 	});
 }
